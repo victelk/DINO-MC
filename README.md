@@ -86,11 +86,22 @@ You can download the full checkpoint of pre-trained model with training infomati
 Our codes refer to <a href="https://github.com/facebookresearch/dino">DINO</a> and <a href="https://github.com/ServiceNow/seasonal-contrast">SeCo</a>. 
 If you want to pre-train DINO-MC based on your datasets: 
 ```
-python run_with_submitit.py --nodes 1 --ngpus 4 --arch vit_small --data_mode mc --data_path /path/to/dataset/train --output_dir /path/to/saving_dir
+python  main_dino_mc.py --arch resnet50 --data_path ../datasets/seasonal_contrast_100k/ --output_dir output --data_mode mc
 ```
 
 ## Fine-tuning
+
 After pre-training, you can evaluate the representations on three end-to-end fine-tuning downstream tasks.
+
+Finetune for the change detection on OSCD downstrean task:
+```
+python main_oscd.py --data_path ../datasets/oscd --arch resnet50 --output_dir output --log_name log --epochs 100 --pretrained_weights checkpoints/rn_mc_checkpoint300.pth
+```
+
+Evaluate checkpoints of the change detection on OSCD downstrean task:
+```
+python main_oscd.py --data_path ../datasets/oscd --arch resnet50 --output_dir output --log_name log --pretrained_weights checkpoints/oscd_mc_rn.ckpt   --trained_weights checkpoints/oscd_mc_rn.ckpt --evaluate TRUE
+```
 
 <table>
   <tr>

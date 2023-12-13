@@ -71,7 +71,7 @@ class ChangeDetectionDataModule(LightningDataModule):
         )
         self.val_dataset = ChangeDetectionDataset(
             self.data_dir,
-            split='visualization',
+            split='test',
             transform=ToTensor(),
             patch_size=self.patch_size
         )

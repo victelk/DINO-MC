@@ -1,5 +1,5 @@
-# refer to SeCo: https://github.com/ServiceNow/seasonal-contrast/blob/main/datasets/oscd_dataset.py
-
+ # copied from SeCo: https://github.com/ServiceNow/seasonal-contrast/blob/main/datasets/oscd_dataset.py
+ 
 from pathlib import Path
 from itertools import product
 
@@ -55,24 +55,18 @@ class ChangeDetectionDataset(Dataset):
 
         self.samples = []
         for name in names:
-            fp = next((self.root / 'images' /name / 'imgs_1').glob(f'*{self.bands[0]}*'))
+            fp = next((self.root / name / 'imgs_1').glob(f'*{self.bands[0]}*'))
             img = rasterio.open(fp)
             limits = product(range(0, img.width, patch_size), range(0, img.height, patch_size))
-            
-            # produce a series of patches
             for l in limits:
-                self.samples.append((self.root / 'images' / name, (l[0], l[1], l[0] + patch_size, l[1] + patch_size)))
+                self.samples.append((self.root / name, (l[0], l[1], l[0] + patch_size, l[1] + patch_size)))
 
     def __getitem__(self, index):
         path, limits = self.samples[index]
-        if self.split == 'train':
-            mask_path = Path(str(path).replace('images','train_labels'))
-        else:
-            mask_path = Path(str(path).replace('images','val_labels'))
-            
+
         img_1 = read_image(path / 'imgs_1', self.bands)
         img_2 = read_image(path / 'imgs_2', self.bands)
-        cm = Image.open(mask_path/ 'cm' / 'cm.png').convert('L')
+        cm = Image.open(path / 'cm' / 'cm.png').convert('L')
 
         img_1 = img_1.crop(limits)
         img_2 = img_2.crop(limits)
@@ -80,6 +74,7 @@ class ChangeDetectionDataset(Dataset):
 
         if self.transform is not None:
             img_1, img_2, cm = self.transform(img_1, img_2, cm)
+
         return img_1, img_2, cm
 
     def __len__(self):
