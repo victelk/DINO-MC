@@ -30,7 +30,8 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torchvision import models as torchvision_models
 from torchvision.datasets.folder import IMG_EXTENSIONS
-from data_process.dino_dataset import MCBase, MCTemporal
+from data_process.dino_cdd_dataset import MCBase
+from data_process.dino_dataset import MCTemporal
 from data_process.dino_augmentation import *
 
 import utils.utils as utils
@@ -154,9 +155,10 @@ def get_args_parser():
 def train_dino(args):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
-    print("git:\n  {}\n".format(utils.get_sha()))
+    # print("git:\n  {}\n".format(utils.get_sha()))
     print("\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
     cudnn.benchmark = True
+    min_loss = float('inf')
 
     # ============ preparing data ... ============
     # load dataset
@@ -341,8 +343,11 @@ def train_dino(args):
         if fp16_scaler is not None:
             save_dict['fp16_scaler'] = fp16_scaler.state_dict()
         utils.save_on_master(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
+        if train_stats["loss"] < min_loss:
+            min_loss = train_stats["loss"]
+            utils.save_on_master(save_dict, os.path.join(args.output_dir, 'best_checkpoint.pth'))
         if args.saveckp_freq and epoch % args.saveckp_freq == 0:
-            utils.save_on_master(save_dict, os.path.join(args.output_dir, 'checkpoint{}:04.pth'.format(epoch)))
+            utils.save_on_master(save_dict, os.path.join(args.output_dir, 'checkpoint{:04}.pth'.format(epoch)))
         log_stats = {**{'train_'+str(k): v for k, v in train_stats.items()},
                      'epoch': epoch}
         if utils.is_main_process():

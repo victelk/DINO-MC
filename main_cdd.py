@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from torchmetrics.classification import Accuracy, BinaryPrecision, BinaryRecall, BinaryF1Score, BinaryJaccardIndex
 
-from data_process.oscd_datamodule import ChangeDetectionDataModule
+from data_process.cdd_datamodule import ChangeDetectionDataModule
 from models.segmentation import get_segmentation_model
 import utils.vision_transformer as vits
 from torchvision import models as torchvision_models
@@ -77,6 +77,26 @@ class SiamSegment(LightningModule):
             tensorboard.add_image('val/'+str(i)+'/mask', mask[i], global_step)
             tensorboard.add_image('val/'+str(i)+'/out'+str(self.cal_f1(pred[i],mask[i])), (pred[i]>=0.2)*1, global_step)
         return loss
+    
+        
+    def test_step(self, batch, batch_idx):
+        img_1, img_2, mask, pred, loss, prec, rec, f1, iou = self.shared_step(batch)
+        self.log('test/loss', loss, prog_bar=True)
+        self.log('test/precision', prec, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/recall', rec, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/f1', f1, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/iou', iou, on_step=False, on_epoch=True, prog_bar=True)
+        tensorboard = self.logger.experiment
+        global_step = self.trainer.global_step
+        assert(len(img_1)==len(img_2)==len(mask)==len(pred))
+        for i in range(len(img_1)):
+            print(str(i),':',self.cal_f1(pred[i],mask[i]))
+            tensorboard.add_image('test/'+str(i)+'/img_1', img_1[i], global_step)
+            tensorboard.add_image('test/'+str(i)+'/img_2', img_2[i], global_step)
+            tensorboard.add_image('test/'+str(i)+'/mask', mask[i], global_step)
+            tensorboard.add_image('test/'+str(i)+'/out'+str(self.cal_f1(pred[i],mask[i])), (pred[i]>=0.2)*1, global_step)
+        return loss
+
     def cal_f1(self,pred, mask):
         f1 = self.f1(pred, mask.long())
         return format(f1, '.4f')
@@ -127,11 +147,13 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers_val', type=int, default=0)
     parser.add_argument('--pretrained_weights', type=str, default=None)
     parser.add_argument('--evaluate', type=bool, default=False)
+    parser.add_argument('--test', type=bool, default=False)
     parser.add_argument('--trained_weights', type=str, default=None)
     args = parser.parse_args()
     print("\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
    
-    datamodule = ChangeDetectionDataModule(args.data_path, args.batch_size,num_workers_train=args.num_workers_train,num_workers_val=args.num_workers_val)
+    datamodule = ChangeDetectionDataModule(args.data_path, args.batch_size, num_workers_train=args.num_workers_train, 
+                                           num_workers_val=args.num_workers_val, patch_size=args.patch_size)
 
     # ============ building network ... ============
     # if the network is a Vision Transformer (i.e. vit_tiny, vit_small, vit_base)
@@ -180,7 +202,9 @@ if __name__ == '__main__':
         save_weights_only=True
     )
     trainer = Trainer(accelerator='gpu', devices=args.gpus, enable_model_summary = False,check_val_every_n_epoch=1, logger=logger, log_every_n_steps=2, callbacks=[checkpoint_callback], max_epochs=args.epochs)
-    if args.evaluate:
+    if args.test:
+        trainer.test(model, datamodule=datamodule, ckpt_path= args.trained_weights, verbose=True)
+    elif args.evaluate:
         trainer.validate(model, datamodule=datamodule, ckpt_path= args.trained_weights, verbose=True)
     else:
         trainer.fit(model, datamodule=datamodule)
